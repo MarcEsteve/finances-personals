@@ -6,3 +6,4 @@ Webapp per gestionar les finances personals de la llar. Permet registrar despese
 
 - **Frontend:** React
 - **Base de dades:** MongoDB (local)
+
