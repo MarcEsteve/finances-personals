@@ -61,3 +61,34 @@
 .card--expense { border-color: #ef4444; }
 .card--balance { border-color: #38bdf8; }
 .card--savings { border-color: #a78bfa; }
+
+/* Taula de transaccions */
+.taula {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.taula th {
+  text-align: left;
+  color: #64748b;
+  font-weight: 600;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid #1e293b;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+}
+
+.taula td {
+  padding: 0.6rem 0.75rem;
+  border-bottom: 1px solid #1e293b;
+  color: #cbd5e1;
+}
+
+.taula tr:last-child td {
+  border-bottom: none;
+}
+
+.positiu { color: #22c55e; font-weight: 600; }
+.negatiu { color: #ef4444; font-weight: 600; }
