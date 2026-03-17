@@ -13,7 +13,10 @@ const navItems = [
 export default function Header() {
   return (
     <header className={styles.header}>
-      <h1 className={styles.title}>Finances Personals 2026</h1>
+      <div className={styles.brand}>
+        <img src="/finpers26-icon.png" alt="Finances Personals" className={styles.logo} />
+        <h1 className={styles.title}>Finances Personals 2026</h1>
+      </div>
       <nav className={styles.nav}>
         {navItems.map(({ to, label }) => (
           <NavLink
