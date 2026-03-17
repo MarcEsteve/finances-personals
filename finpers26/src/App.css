@@ -164,3 +164,88 @@
 }
 
 .btn-delete:hover { color: #ef4444; }
+
+/* Informes */
+.report-panel {
+  margin-top: 1.5rem;
+  background-color: #1e293b;
+  border-radius: 10px;
+  padding: 1rem;
+}
+
+.report-controls {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+
+.report-toggle-group {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.report-filter-group {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.report-filter-label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  color: #94a3b8;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.report-select {
+  border: 1px solid #334155;
+  background-color: #0f172a;
+  color: #f8fafc;
+  border-radius: 8px;
+  padding: 0.45rem 0.7rem;
+  font-size: 0.85rem;
+  min-width: 120px;
+}
+
+.report-select:focus {
+  outline: none;
+  border-color: #38bdf8;
+}
+
+.report-toggle {
+  border: 1px solid #334155;
+  background-color: #0f172a;
+  color: #94a3b8;
+  border-radius: 8px;
+  padding: 0.45rem 0.8rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.report-toggle.active {
+  color: #f8fafc;
+  border-color: transparent;
+}
+
+.report-toggle.active.income { background-color: #166534; }
+.report-toggle.active.expense { background-color: #b91c1c; }
+.report-toggle.active.compare { background-color: #1d4ed8; }
+
+.report-chart-wrap {
+  background: #0b1220;
+  border: 1px solid #1e293b;
+  border-radius: 10px;
+  padding: 0.5rem;
+}
+
+.report-subtitle {
+  margin: 1.25rem 0 0.75rem;
+  color: #cbd5e1;
+  font-size: 0.95rem;
+}
