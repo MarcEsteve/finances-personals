@@ -396,3 +396,46 @@
   margin: 0;
   color: #94a3b8;
 }
+
+.fiscal-box {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid #334155;
+}
+
+.fiscal-summary {
+  margin-top: 0.9rem;
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.fiscal-chip {
+  display: inline-flex;
+  align-items: center;
+  background-color: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 999px;
+  padding: 0.35rem 0.75rem;
+  color: #cbd5e1;
+  font-size: 0.82rem;
+}
+
+.fiscal-actions {
+  display: flex;
+  gap: 0.9rem;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 1rem;
+}
+
+.fiscal-note {
+  color: #94a3b8;
+  font-size: 0.85rem;
+}
+
+.fiscal-detail {
+  color: #94a3b8;
+  font-size: 0.82rem;
+  min-width: 240px;
+}

@@ -1,14 +1,40 @@
 import { useEffect, useMemo, useState } from 'react'
 
+interface FacturaDetail {
+  base?: number
+  ivaPct?: number
+  ivaImport?: number
+  irpfPct?: number
+  irpfImport?: number
+  totalFactura?: number
+}
+
+interface NominaDetail {
+  mode?: 'net' | 'brut' | 'base'
+  baseSou?: number
+  complements?: number
+  brut?: number
+  irpfImport?: number
+  ssImport?: number
+  altresDeduccions?: number
+  net?: number
+}
+
 interface Transaccio {
   _id: string
   tipus: 'ingres' | 'despesa' | 'estalvi'
   categoria: string
   import: number
   data: string
+  detallIngres?: {
+    tipus?: 'general' | 'factura' | 'nomina'
+    factura?: FacturaDetail
+    nomina?: NominaDetail
+  }
 }
 
 const AUTONOM_CATEGORIES = /(freelance|aut[oò]nom|factur|consultor|servei|projecte)/i
+const NOMINA_CATEGORIES = /n[oò]mina/i
 
 const QUARTERS = [
   { value: 'Q1', label: 'T1 (Gen-Mar)', months: [1, 2, 3] },
@@ -74,9 +100,18 @@ export default function Impostos() {
   }, [quarterMonths, selectedYear, transaccions])
 
   const calculs = useMemo(() => {
-    const ingressosAutonom = trimestreData
-      .filter(t => t.tipus === 'ingres' && AUTONOM_CATEGORIES.test(t.categoria))
-      .reduce((sum, t) => sum + Math.abs(t.import), 0)
+    const facturesDetallades = trimestreData.filter(t => t.tipus === 'ingres' && t.detallIngres?.tipus === 'factura')
+    const facturesLegacy = trimestreData.filter(
+      t => t.tipus === 'ingres' && t.detallIngres?.tipus !== 'factura' && AUTONOM_CATEGORIES.test(t.categoria)
+    )
+    const nominesDetallades = trimestreData.filter(t => t.tipus === 'ingres' && t.detallIngres?.tipus === 'nomina')
+    const nominesLegacy = trimestreData.filter(
+      t => t.tipus === 'ingres' && t.detallIngres?.tipus !== 'nomina' && NOMINA_CATEGORIES.test(t.categoria)
+    )
+
+    const ingressosAutonomBaseDetall = facturesDetallades.reduce((sum, t) => sum + (t.detallIngres?.factura?.base || 0), 0)
+    const ingressosAutonomBaseLegacy = facturesLegacy.reduce((sum, t) => sum + Math.abs(t.import), 0)
+    const ingressosAutonomBase = ingressosAutonomBaseDetall + ingressosAutonomBaseLegacy
 
     const despesesTotals = trimestreData
       .filter(t => t.tipus === 'despesa')
@@ -84,13 +119,28 @@ export default function Impostos() {
 
     const despesesDeduibles = despesesTotals * (clampPct(deduiblePct) / 100)
 
-    const ivaRepercutit = ingressosAutonom * (clampPct(ivaRate) / 100)
+    const ivaRepercutitDetall = facturesDetallades.reduce((sum, t) => sum + (t.detallIngres?.factura?.ivaImport || 0), 0)
+    const ivaRepercutitLegacy = ingressosAutonomBaseLegacy * (clampPct(ivaRate) / 100)
+    const ivaRepercutit = ivaRepercutitDetall + ivaRepercutitLegacy
+
+    const irpfRetingutFacturesDetall = facturesDetallades.reduce((sum, t) => sum + (t.detallIngres?.factura?.irpfImport || 0), 0)
+    const irpfRetingutFacturesLegacy = ingressosAutonomBaseLegacy * (clampPct(irpfRate) / 100)
+    const irpfRetingutFactures = irpfRetingutFacturesDetall + irpfRetingutFacturesLegacy
+
     const ivaSuportat = despesesDeduibles * (clampPct(ivaRate) / 100)
     const ivaTrimestral = Math.max(0, ivaRepercutit - ivaSuportat)
 
     const quotaSsTrimestral = Math.max(0, ssMensual) * 3
-    const baseIrpf = Math.max(0, ingressosAutonom - despesesDeduibles - quotaSsTrimestral)
-    const irpfTrimestral = baseIrpf * (clampPct(irpfRate) / 100)
+    const baseIrpf = Math.max(0, ingressosAutonomBase - despesesDeduibles - quotaSsTrimestral)
+    const irpfTeoricAutonom = baseIrpf * (clampPct(irpfRate) / 100)
+    const irpfTrimestral = Math.max(0, irpfTeoricAutonom - irpfRetingutFactures)
+
+    const nominaBruta = nominesDetallades.reduce((sum, t) => sum + (t.detallIngres?.nomina?.brut || Math.abs(t.import)), 0)
+    const nominaNetaDetall = nominesDetallades.reduce((sum, t) => sum + (t.detallIngres?.nomina?.net || Math.abs(t.import)), 0)
+    const nominaNetaLegacy = nominesLegacy.reduce((sum, t) => sum + Math.abs(t.import), 0)
+    const nominaNeta = nominaNetaDetall + nominaNetaLegacy
+    const irpfNomina = nominesDetallades.reduce((sum, t) => sum + (t.detallIngres?.nomina?.irpfImport || 0), 0)
+    const ssNomina = nominesDetallades.reduce((sum, t) => sum + (t.detallIngres?.nomina?.ssImport || 0), 0)
 
     const impostosVehiclesAnuals = Math.max(0, impostCotxeAnual) + Math.max(0, impostMotoAnual)
     const prorrataVehiclesTrimestre = impostosVehiclesAnuals / 4
@@ -98,7 +148,8 @@ export default function Impostos() {
     const reservaRecomanada = ivaTrimestral + irpfTrimestral + quotaSsTrimestral + prorrataVehiclesTrimestre
 
     return {
-      ingressosAutonom,
+      ingressosAutonomBase,
+      ingressosAutonomBaseLegacy,
       despesesTotals,
       despesesDeduibles,
       ivaRepercutit,
@@ -106,7 +157,13 @@ export default function Impostos() {
       ivaTrimestral,
       quotaSsTrimestral,
       baseIrpf,
+      irpfTeoricAutonom,
+      irpfRetingutFactures,
       irpfTrimestral,
+      nominaBruta,
+      nominaNeta,
+      irpfNomina,
+      ssNomina,
       impostosVehiclesAnuals,
       prorrataVehiclesTrimestre,
       reservaRecomanada,
@@ -117,7 +174,7 @@ export default function Impostos() {
     <section>
       <h2>Impostos</h2>
       <p className="page-description">
-        Estimació fiscal mínima per autònom: IVA trimestral, IRPF estimat, cotització a la Seguretat Social i impostos anuals de vehicles.
+        Estimació fiscal amb lectura separada de factures freelance i nòmines. Si un ingrés no té detall fiscal, es manté el càlcul estimat de compatibilitat.
       </p>
 
       {error && <p style={{ color: '#ef4444' }}>⚠ {error}</p>}
@@ -143,7 +200,7 @@ export default function Impostos() {
           </label>
 
           <label>
-            IVA factures (%)
+            IVA estimat per ingressos antics (%)
             <input
               type="number"
               min="0"
@@ -155,7 +212,7 @@ export default function Impostos() {
           </label>
 
           <label>
-            IRPF estimat (%)
+            IRPF estimat per ingressos antics (%)
             <input
               type="number"
               min="0"
@@ -196,6 +253,10 @@ export default function Impostos() {
           <span className="card__label">IVA repercutit</span>
           <span className="card__value">{fmt(calculs.ivaRepercutit)}</span>
         </div>
+        <div className="card card--balance">
+          <span className="card__label">IRPF retingut factures</span>
+          <span className="card__value">{fmt(calculs.irpfRetingutFactures)}</span>
+        </div>
         <div className="card card--expense">
           <span className="card__label">IVA suportat</span>
           <span className="card__value">{fmt(calculs.ivaSuportat)}</span>
@@ -205,16 +266,32 @@ export default function Impostos() {
           <span className="card__value">{fmt(calculs.ivaTrimestral)}</span>
         </div>
         <div className="card card--expense">
-          <span className="card__label">IRPF estimat autònom</span>
+          <span className="card__label">IRPF pendent autònom</span>
           <span className="card__value">{fmt(calculs.irpfTrimestral)}</span>
         </div>
         <div className="card card--savings">
-          <span className="card__label">Quota SS trimestre</span>
+          <span className="card__label">Quota SS autònom trimestre</span>
           <span className="card__value">{fmt(calculs.quotaSsTrimestral)}</span>
         </div>
         <div className="card card--balance">
           <span className="card__label">Reserva recomanada</span>
           <span className="card__value">{fmt(calculs.reservaRecomanada)}</span>
+        </div>
+        <div className="card card--income">
+          <span className="card__label">Sou brut nòmina</span>
+          <span className="card__value">{fmt(calculs.nominaBruta)}</span>
+        </div>
+        <div className="card card--income">
+          <span className="card__label">Sou net nòmina</span>
+          <span className="card__value">{fmt(calculs.nominaNeta)}</span>
+        </div>
+        <div className="card card--expense">
+          <span className="card__label">IRPF nòmina</span>
+          <span className="card__value">{fmt(calculs.irpfNomina)}</span>
+        </div>
+        <div className="card card--expense">
+          <span className="card__label">SS nòmina treballador</span>
+          <span className="card__value">{fmt(calculs.ssNomina)}</span>
         </div>
       </div>
 
@@ -253,10 +330,12 @@ export default function Impostos() {
       <div className="form-transaccio" style={{ marginTop: '1rem' }}>
         <h3 style={{ marginTop: 0, color: '#cbd5e1', fontSize: '1rem' }}>Base de càlcul del trimestre</h3>
         <div style={{ color: '#94a3b8', fontSize: '0.9rem', lineHeight: 1.7 }}>
-          <div>Ingressos autònom detectats per categoria: <strong style={{ color: '#f8fafc' }}>{fmt(calculs.ingressosAutonom)}</strong></div>
+          <div>Base freelance per càlcul fiscal: <strong style={{ color: '#f8fafc' }}>{fmt(calculs.ingressosAutonomBase)}</strong></div>
+          <div>Part estimada amb registres antics: <strong style={{ color: '#f8fafc' }}>{fmt(calculs.ingressosAutonomBaseLegacy)}</strong></div>
           <div>Despeses totals: <strong style={{ color: '#f8fafc' }}>{fmt(calculs.despesesTotals)}</strong></div>
           <div>Despeses deduïbles estimades: <strong style={{ color: '#f8fafc' }}>{fmt(calculs.despesesDeduibles)}</strong></div>
-          <div>Base IRPF estimada: <strong style={{ color: '#f8fafc' }}>{fmt(calculs.baseIrpf)}</strong></div>
+          <div>Base IRPF autònom: <strong style={{ color: '#f8fafc' }}>{fmt(calculs.baseIrpf)}</strong></div>
+          <div>IRPF teòric autònom: <strong style={{ color: '#f8fafc' }}>{fmt(calculs.irpfTeoricAutonom)}</strong></div>
         </div>
       </div>
     </section>
