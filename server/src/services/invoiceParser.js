@@ -75,6 +75,57 @@ function extractMoneyAmounts(text) {
     .filter(v => v !== null)
 }
 
+function approxEquals(a, b, tolerance = 0.02) {
+  return Math.abs(a - b) <= tolerance
+}
+
+function amountExists(amounts, target, tolerance = 0.02) {
+  return amounts.some(v => approxEquals(v, target, tolerance))
+}
+
+function pickBestBaseFromAmounts(amounts, ivaPct, irpfPct, explicitTotal, explicitBase) {
+  if (ivaPct === null || irpfPct === null) return null
+
+  const factor = 1 + ivaPct / 100 - irpfPct / 100
+  if (factor <= 0.0001) return null
+
+  const positives = Array.from(new Set(amounts.filter(v => v > 0).map(v => round2(v)))).sort((a, b) => b - a)
+  if (positives.length === 0) return null
+
+  let best = null
+
+  for (const totalCandidate of positives) {
+    const baseCandidate = round2(totalCandidate / factor)
+    const ivaCandidate = round2(baseCandidate * (ivaPct / 100))
+    const irpfCandidate = round2(baseCandidate * (irpfPct / 100))
+
+    let score = 0
+
+    if (amountExists(amounts, baseCandidate, 0.05)) score += 5
+    if (amountExists(amounts, ivaCandidate, 0.05)) score += 4
+    if (amountExists(amounts, irpfCandidate, 0.05)) score += 4
+
+    if (explicitTotal !== null && approxEquals(totalCandidate, explicitTotal, 0.05)) score += 2
+    if (explicitBase !== null && approxEquals(baseCandidate, explicitBase, 0.05)) score += 2
+
+    // Penalize impossible totals that are lower than at least one tax amount match.
+    if (totalCandidate < ivaCandidate || totalCandidate < irpfCandidate) score -= 3
+
+    if (!best || score > best.score) {
+      best = {
+        score,
+        total: totalCandidate,
+        base: baseCandidate,
+        ivaImport: ivaCandidate,
+        irpfImport: irpfCandidate,
+      }
+    }
+  }
+
+  if (!best || best.score < 4) return null
+  return best
+}
+
 function extractInvoiceDate(text) {
   const match = text.match(/(?:\bdata\b|\bfecha\b)\s*[:\-]?\s*(\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4})/i)
   if (!match || !match[1]) return null
@@ -316,15 +367,23 @@ function parseInvoiceText(text) {
     ])
   }
 
-  // If total was captured as tax line value (common OCR issue), promote to strongest monetary total.
-  const positiveMoney = moneyAmounts.filter(n => n > 0)
-  if (positiveMoney.length > 0) {
-    const maxMoney = Math.max(...positiveMoney)
-    if (
-      totalFactura === null ||
-      (maxMoney > totalFactura * 1.2 && (ivaImport === null || Math.abs(totalFactura - Math.abs(ivaImport)) < 0.01))
-    ) {
-      totalFactura = maxMoney
+  // Choose the most consistent total/base pair from detected amounts.
+  const bestFromAmounts = pickBestBaseFromAmounts(
+    moneyAmounts,
+    ivaPct,
+    irpfPct,
+    totalFactura,
+    base
+  )
+
+  if (bestFromAmounts) {
+    totalFactura = bestFromAmounts.total
+    base = bestFromAmounts.base
+    if (ivaImport === null || !amountExists(moneyAmounts, ivaImport, 0.05)) {
+      ivaImport = bestFromAmounts.ivaImport
+    }
+    if (irpfImport === null || !amountExists(moneyAmounts, irpfImport, 0.05)) {
+      irpfImport = bestFromAmounts.irpfImport
     }
   }
 
