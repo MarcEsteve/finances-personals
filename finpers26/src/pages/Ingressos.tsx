@@ -85,6 +85,17 @@ function clientLabel(client: Client) {
   return client.razonSocial
 }
 
+function normalizeEntityName(value: string) {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\b(s l u|slu|s l|sl|s a|sa|llc|inc)\b/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 const avui = () => new Date().toISOString().slice(0, 10)
 
 function createEmptyForm(clientId = '') {
@@ -243,6 +254,7 @@ export default function Ingressos() {
   const [fitxerAdjunt, setFitxerAdjunt] = useState<File | null>(null)
   const [fileInputKey, setFileInputKey] = useState(0)
   const [parsingPdf, setParsingPdf] = useState(false)
+  const [parseInfo, setParseInfo] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editForm, setEditForm] = useState({ categoria: 'General', clientId: '', descripcio: '', import: '', data: avui() })
@@ -418,15 +430,23 @@ export default function Ingressos() {
   const analitzaPdfFactura = async () => {
     if (!fitxerAdjunt) {
       setError('Primer has de seleccionar un PDF')
+      setParseInfo(null)
+      return
+    }
+    if (fitxerAdjunt.type !== 'application/pdf') {
+      setError('Per autoemplenar has de pujar un fitxer PDF')
+      setParseInfo(null)
       return
     }
     if (form.detallTipus !== 'factura') {
       setError('L\'autocompleció de Base/IVA/IRPF només està disponible per factures')
+      setParseInfo(null)
       return
     }
 
     setParsingPdf(true)
     setError(null)
+    setParseInfo('Analitzant PDF...')
     try {
       const formData = new FormData()
       formData.append('fitxer', fitxerAdjunt)
@@ -441,14 +461,60 @@ export default function Ingressos() {
 
       const parsed = body?.parsed || {}
 
+      const nextBase = parsed.base != null ? String(parsed.base) : form.facturaBase
+      const nextIva = parsed.ivaPct != null ? String(parsed.ivaPct) : form.facturaIvaPct
+      const nextIrpf = parsed.irpfPct != null ? String(parsed.irpfPct) : form.facturaIrpfPct
+      const nextDate = typeof parsed.invoiceDate === 'string' && parsed.invoiceDate ? parsed.invoiceDate : form.data
+
+      let detectedClientId = form.clientId
+      let clientMatched = false
+
+      if (typeof parsed.clientName === 'string' && parsed.clientName.trim()) {
+        const parsedNorm = normalizeEntityName(parsed.clientName)
+        const match = clients.find(c => {
+          const razon = normalizeEntityName(c.razonSocial || '')
+          const alias = normalizeEntityName(c.nom || '')
+          return (
+            razon === parsedNorm ||
+            alias === parsedNorm ||
+            (parsedNorm && razon.includes(parsedNorm)) ||
+            (parsedNorm && alias.includes(parsedNorm)) ||
+            (razon && parsedNorm.includes(razon)) ||
+            (alias && parsedNorm.includes(alias))
+          )
+        })
+
+        if (match?._id) {
+          detectedClientId = match._id
+          clientMatched = true
+        }
+      }
+
+      const found = [parsed.base, parsed.ivaPct, parsed.irpfPct].filter(v => v != null).length
+
       setForm(prev => ({
         ...prev,
-        facturaBase: parsed.base != null ? String(parsed.base) : prev.facturaBase,
-        facturaIvaPct: parsed.ivaPct != null ? String(parsed.ivaPct) : prev.facturaIvaPct,
-        facturaIrpfPct: parsed.irpfPct != null ? String(parsed.irpfPct) : prev.facturaIrpfPct,
+        facturaBase: nextBase,
+        facturaIvaPct: nextIva,
+        facturaIrpfPct: nextIrpf,
+        data: nextDate,
+        clientId: detectedClientId,
       }))
+
+      if (found === 0) {
+        setParseInfo('No s\'han detectat camps fiscals al PDF. Pot ser escanejat o amb format no reconeixible.')
+      } else {
+        const dateInfo = parsed.invoiceDate ? ` · Data: ${parsed.invoiceDate}` : ''
+        const clientInfo = parsed.clientName
+          ? clientMatched
+            ? ` · Client detectat: ${parsed.clientName}`
+            : ` · Client al PDF: ${parsed.clientName} (sense coincidència automàtica)`
+          : ''
+        setParseInfo(`Camps detectats: ${found}/3 · Base: ${nextBase || '-'} · IVA: ${nextIva || '-'}% · IRPF: ${nextIrpf || '-'}%${dateInfo}${clientInfo}`)
+      }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Error desconegut')
+      setParseInfo(null)
     } finally {
       setParsingPdf(false)
     }
@@ -686,7 +752,10 @@ export default function Ingressos() {
             <input
               key={fileInputKey}
               type="file"
-              onChange={e => setFitxerAdjunt(e.target.files?.[0] || null)}
+              onChange={e => {
+                setFitxerAdjunt(e.target.files?.[0] || null)
+                setParseInfo(null)
+              }}
             />
           </label>
           <button
@@ -703,6 +772,9 @@ export default function Ingressos() {
             Opcional. Es guardarà vinculat a aquesta factura o nòmina. Si és una factura en PDF, pots autoemplenar Base/IVA/IRPF.
           </span>
         </div>
+        {parseInfo && (
+          <p style={{ color: '#cbd5e1', marginTop: '0.5rem', marginBottom: 0 }}>{parseInfo}</p>
+        )}
 
         <div className="fiscal-actions">
           <button type="submit" className="btn btn--income" disabled={submitting || clients.length === 0}>

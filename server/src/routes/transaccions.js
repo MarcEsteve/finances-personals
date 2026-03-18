@@ -1,11 +1,26 @@
 const express = require('express')
 const router = express.Router()
+const multer = require('multer')
 const path = require('path')
 const fs = require('fs')
 const Transaccio = require('../models/Transaccio')
 const { calculaValor, obtePreu } = require('../services/cryptoService')
 const { parseInvoicePdfBuffer } = require('../services/invoiceParser')
 const { upload, uploadsDir } = require('../middlewares/upload')
+
+const parseFacturaUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 15 * 1024 * 1024,
+  },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype === 'application/pdf') {
+      cb(null, true)
+      return
+    }
+    cb(new Error('Només s\'accepten fitxers PDF per analitzar factures'))
+  },
+})
 
 function validateIngresRequiredFields(body) {
   if (body.tipus !== 'ingres') return null
@@ -172,21 +187,14 @@ router.put('/actualitza-criptos', async (req, res) => {
 })
 
 // POST /api/transaccions/parse-factura-pdf - Analitza un PDF i extreu Base/IVA/IRPF/Total
-router.post('/parse-factura-pdf', upload.single('fitxer'), async (req, res) => {
+router.post('/parse-factura-pdf', parseFacturaUpload.single('fitxer'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ missatge: 'No s\'ha enviat cap fitxer' })
     }
 
-    if (req.file.mimetype !== 'application/pdf') {
-      fs.unlinkSync(req.file.path)
-      return res.status(400).json({ missatge: 'Només s\'accepten fitxers PDF per analitzar factures' })
-    }
-
-    const buffer = fs.readFileSync(req.file.path)
+    const buffer = req.file.buffer
     const { parsed, textSnippet } = await parseInvoicePdfBuffer(buffer)
-
-    fs.unlinkSync(req.file.path)
 
     return res.json({
       missatge: 'Factura analitzada correctament',
@@ -194,9 +202,6 @@ router.post('/parse-factura-pdf', upload.single('fitxer'), async (req, res) => {
       textSnippet,
     })
   } catch (error) {
-    if (req.file && fs.existsSync(req.file.path)) {
-      fs.unlinkSync(req.file.path)
-    }
     return res.status(400).json({ missatge: error.message })
   }
 })
