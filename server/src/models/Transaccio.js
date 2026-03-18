@@ -4,7 +4,7 @@ const transaccioSchema = new mongoose.Schema(
   {
     tipus: {
       type: String,
-      enum: ['ingres', 'despesa'],
+      enum: ['ingres', 'despesa', 'estalvi'],
       required: true,
     },
     categoria: {

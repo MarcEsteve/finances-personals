@@ -14,14 +14,14 @@ import {
 
 interface Transaccio {
   _id: string
-  tipus: 'ingres' | 'despesa'
+  tipus: 'ingres' | 'despesa' | 'estalvi'
   categoria: string
   descripcio: string
   import: number
   data: string
 }
 
-type Vista = 'ingressos' | 'despeses' | 'comparativa'
+type Vista = 'ingressos' | 'despeses' | 'inversions' | 'comparativa'
 type Agrupacio = 'dia' | 'mes'
 
 const MESOS = [
@@ -96,16 +96,20 @@ export default function Informes() {
     const despeses = filteredTransaccions
       .filter(t => t.tipus === 'despesa')
       .reduce((sum, t) => sum + Math.abs(t.import), 0)
+    const inversions = filteredTransaccions
+      .filter(t => t.tipus === 'estalvi')
+      .reduce((sum, t) => sum + Math.abs(t.import), 0)
 
     return {
       ingressos,
       despeses,
-      saldo: ingressos - despeses,
+      inversions,
+      saldo: ingressos - despeses - inversions,
     }
   }, [filteredTransaccions])
 
   const chartData = useMemo(() => {
-    const bucket = new Map<string, { ingressos: number; despeses: number }>()
+    const bucket = new Map<string, { ingressos: number; despeses: number; inversions: number }>()
 
     for (const t of filteredTransaccions) {
       const date = new Date(t.data)
@@ -115,13 +119,14 @@ export default function Informes() {
           : `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
 
       if (!bucket.has(key)) {
-        bucket.set(key, { ingressos: 0, despeses: 0 })
+        bucket.set(key, { ingressos: 0, despeses: 0, inversions: 0 })
       }
 
       const entry = bucket.get(key)
       if (!entry) continue
       if (t.tipus === 'ingres') entry.ingressos += Math.abs(t.import)
-      else entry.despeses += Math.abs(t.import)
+      else if (t.tipus === 'despesa') entry.despeses += Math.abs(t.import)
+      else entry.inversions += Math.abs(t.import)
     }
 
     return Array.from(bucket.entries())
@@ -131,6 +136,7 @@ export default function Informes() {
         label: formatLabel(key, agrupacio),
         ingressos: values.ingressos,
         despeses: values.despeses,
+        inversions: values.inversions,
       }))
   }, [agrupacio, filteredTransaccions])
 
@@ -138,7 +144,7 @@ export default function Informes() {
     if (vista === 'comparativa') return []
 
     const bucket = new Map<string, number>()
-    const tipusFiltre = vista === 'ingressos' ? 'ingres' : 'despesa'
+    const tipusFiltre = vista === 'ingressos' ? 'ingres' : vista === 'despeses' ? 'despesa' : 'estalvi'
 
     for (const t of filteredTransaccions) {
       if (t.tipus !== tipusFiltre) continue
@@ -166,7 +172,7 @@ export default function Informes() {
     <section>
       <h2>Informes</h2>
       <p className="page-description">
-        Visualitza l'evolució dels ingressos i les despeses per dies o per mesos. Després hi podrem afegir el detall per categories.
+        Visualitza l'evolució dels ingressos, despeses i inversions per dies o per mesos, amb detall per categories.
       </p>
 
       {error && <p style={{ color: '#ef4444' }}>⚠ {error}</p>}
@@ -180,8 +186,12 @@ export default function Informes() {
           <span className="card__label">Total despeses</span>
           <span className="card__value">{fmt(totals.despeses)}</span>
         </div>
+        <div className="card card--savings">
+          <span className="card__label">Total inversions</span>
+          <span className="card__value">{fmt(totals.inversions)}</span>
+        </div>
         <div className="card card--balance">
-          <span className="card__label">Saldo net</span>
+          <span className="card__label">Saldo de caixa</span>
           <span className="card__value">{fmt(totals.saldo)}</span>
         </div>
       </div>
@@ -200,6 +210,12 @@ export default function Informes() {
               onClick={() => setVista('despeses')}
             >
               Despeses
+            </button>
+            <button
+              className={`report-toggle ${vista === 'inversions' ? 'active savings' : ''}`}
+              onClick={() => setVista('inversions')}
+            >
+              Inversions
             </button>
             <button
               className={`report-toggle ${vista === 'comparativa' ? 'active compare' : ''}`}
@@ -299,20 +315,32 @@ export default function Informes() {
                     activeDot={{ r: 5 }}
                   />
                 )}
+
+                {vista === 'inversions' && (
+                  <Line
+                    type="monotone"
+                    dataKey="inversions"
+                    name="Inversions"
+                    stroke="#6366f1"
+                    strokeWidth={3}
+                    dot={{ r: 3 }}
+                    activeDot={{ r: 5 }}
+                  />
+                )}
               </LineChart>
             </ResponsiveContainer>
           )}
         </div>
 
         <h3 className="report-subtitle">
-          Distribució per categoria ({vista === 'ingressos' ? 'Ingressos' : vista === 'despeses' ? 'Despeses' : 'Selecciona Ingressos o Despeses'})
+          Distribució per categoria ({vista === 'ingressos' ? 'Ingressos' : vista === 'despeses' ? 'Despeses' : vista === 'inversions' ? 'Inversions' : 'Selecciona una vista individual'})
         </h3>
         <div className="report-chart-wrap">
           {loading ? (
             <p style={{ color: '#94a3b8' }}>Carregant gràfic per categories...</p>
           ) : vista === 'comparativa' ? (
             <p style={{ color: '#94a3b8' }}>
-              La comparativa de categories no té sentit entre ingressos i despeses. Selecciona Ingressos o Despeses per veure aquest detall.
+              La comparativa de categories no té sentit entre ingressos, despeses i inversions. Selecciona una vista individual per veure aquest detall.
             </p>
           ) : categoryData.length === 0 ? (
             <p style={{ color: '#94a3b8' }}>Encara no hi ha categories amb dades.</p>
@@ -341,10 +369,14 @@ export default function Informes() {
                 />
                 <Legend />
 
-                {vista === 'ingressos' ? (
+                {vista === 'ingressos' && (
                   <Bar dataKey="total" name="Ingressos" fill="#22c55e" radius={[6, 6, 0, 0]} />
-                ) : (
+                )}
+                {vista === 'despeses' && (
                   <Bar dataKey="total" name="Despeses" fill="#ef4444" radius={[6, 6, 0, 0]} />
+                )}
+                {vista === 'inversions' && (
+                  <Bar dataKey="total" name="Inversions" fill="#6366f1" radius={[6, 6, 0, 0]} />
                 )}
               </BarChart>
             </ResponsiveContainer>

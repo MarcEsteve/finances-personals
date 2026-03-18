@@ -23,6 +23,25 @@ router.post('/', async (req, res) => {
   }
 })
 
+// PUT /api/transaccions/:id
+router.put('/:id', async (req, res) => {
+  try {
+    const actualitzada = await Transaccio.findByIdAndUpdate(
+      req.params.id,
+      req.body,
+      { new: true, runValidators: true }
+    )
+
+    if (!actualitzada) {
+      return res.status(404).json({ missatge: 'Transacció no trobada' })
+    }
+
+    res.json(actualitzada)
+  } catch (error) {
+    res.status(400).json({ missatge: error.message })
+  }
+})
+
 // DELETE /api/transaccions/:id
 router.delete('/:id', async (req, res) => {
   try {
