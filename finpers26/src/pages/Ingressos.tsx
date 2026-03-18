@@ -1,7 +1,14 @@
-import { useEffect, useMemo, useState } from 'react'
+﻿import { useEffect, useMemo, useState } from 'react'
 
 type DetallTipus = 'general' | 'factura' | 'nomina'
 type NominaMode = 'net' | 'brut' | 'base'
+
+interface Client {
+  _id: string
+  nom: string
+  razonSocial: string
+  actiu: boolean
+}
 
 interface FacturaDetail {
   base?: number
@@ -35,10 +42,12 @@ interface Transaccio {
   descripcio: string
   import: number
   data: string
+  clientId?: string
+  adjunts?: Array<{ fileName: string; originalName?: string }>
   detallIngres?: DetallIngres
 }
 
-const CATEGORIES = ['Nòmina', 'Freelance', 'Rendiments', 'Bonus', 'Altres']
+const TIPUS_FISCALS_SELECTABLES: DetallTipus[] = ['factura', 'nomina']
 
 function fmt(n: number) {
   return n.toLocaleString('ca-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €'
@@ -49,18 +58,39 @@ function parseAmount(value: string) {
   return Number.isFinite(parsed) ? parsed : 0
 }
 
-function defaultDetailTypeByCategory(categoria: string): DetallTipus {
-  if (categoria === 'Freelance') return 'factura'
-  if (categoria === 'Nòmina') return 'nomina'
+function labelTipusFiscal(tipus: DetallTipus) {
+  if (tipus === 'factura') return 'Factura freelance'
+  if (tipus === 'nomina') return 'Nòmina'
+  return 'General'
+}
+
+function categoriaFromTipusFiscal(tipus: DetallTipus) {
+  if (tipus === 'factura') return 'Factura'
+  if (tipus === 'nomina') return 'Nòmina'
+  return 'General'
+}
+
+function tipusFiscalFromTransaccio(transaccio: Transaccio): DetallTipus {
+  const detall = transaccio.detallIngres?.tipus
+  if (detall === 'factura' || detall === 'nomina' || detall === 'general') return detall
+
+  const categoria = (transaccio.categoria || '').toLowerCase()
+  if (categoria.includes('factura') || categoria.includes('freelance')) return 'factura'
+  if (categoria.includes('nòmina') || categoria.includes('nomina')) return 'nomina'
   return 'general'
+}
+
+function clientLabel(client: Client) {
+  if (client.nom && client.nom.trim()) return `${client.nom.trim()} (${client.razonSocial})`
+  return client.razonSocial
 }
 
 const avui = () => new Date().toISOString().slice(0, 10)
 
-function createEmptyForm(categoria = CATEGORIES[0]) {
+function createEmptyForm(clientId = '') {
   return {
-    categoria,
-    detallTipus: defaultDetailTypeByCategory(categoria),
+    detallTipus: 'factura' as DetallTipus,
+    clientId,
     descripcio: '',
     import: '',
     data: avui(),
@@ -123,14 +153,19 @@ function computeNomina(form: ReturnType<typeof createEmptyForm>) {
 }
 
 function buildPayload(form: ReturnType<typeof createEmptyForm>) {
+  const descripcio = form.descripcio.trim()
+  if (!descripcio) throw new Error('La descripció és obligatòria')
+  if (!form.clientId) throw new Error('Has de seleccionar un client')
+
   if (form.detallTipus === 'factura') {
     const factura = computeFactura(form)
     if (factura.base <= 0) throw new Error('La base de la factura ha de ser major que 0')
 
     return {
       tipus: 'ingres',
-      categoria: form.categoria,
-      descripcio: form.descripcio,
+      categoria: categoriaFromTipusFiscal(form.detallTipus),
+      clientId: form.clientId,
+      descripcio,
       import: factura.totalFactura,
       data: form.data,
       detallIngres: {
@@ -146,8 +181,9 @@ function buildPayload(form: ReturnType<typeof createEmptyForm>) {
 
     return {
       tipus: 'ingres',
-      categoria: form.categoria,
-      descripcio: form.descripcio,
+      categoria: categoriaFromTipusFiscal(form.detallTipus),
+      clientId: form.clientId,
+      descripcio,
       import: nomina.net,
       data: form.data,
       detallIngres: {
@@ -157,71 +193,103 @@ function buildPayload(form: ReturnType<typeof createEmptyForm>) {
     }
   }
 
-  const parsedImport = parseAmount(form.import)
-  if (parsedImport <= 0) throw new Error('L\'import ha de ser major que 0')
-
-  return {
-    tipus: 'ingres',
-    categoria: form.categoria,
-    descripcio: form.descripcio,
-    import: parsedImport,
-    data: form.data,
-    detallIngres: {
-      tipus: 'general' as DetallTipus,
-    },
-  }
+  throw new Error('Has de seleccionar un tipus fiscal vàlid: factura o nòmina')
 }
 
 function formatDetallFiscal(transaccio: Transaccio) {
   if (transaccio.detallIngres?.tipus === 'factura' && transaccio.detallIngres.factura) {
     const factura = transaccio.detallIngres.factura
-    return `Factura · Base ${fmt(factura.base || 0)} · IVA ${fmt(factura.ivaImport || 0)} · IRPF ${fmt(factura.irpfImport || 0)}`
+    return (
+      <div style={{ fontSize: '0.9em', lineHeight: '1.5' }}>
+        <div style={{ fontWeight: 600, color: '#0ea5e9' }}>📄 Factura</div>
+        <div>Base: <strong>{fmt(factura.base || 0)}</strong></div>
+        <div>IVA ({factura.ivaPct}%): <strong style={{ color: '#10b981' }}>+{fmt(factura.ivaImport || 0)}</strong></div>
+        <div>IRPF ({factura.irpfPct}%): <strong style={{ color: '#ef4444' }}>-{fmt(factura.irpfImport || 0)}</strong></div>
+        <div style={{ borderTop: '1px solid #cbd5e1', paddingTop: '0.5rem', marginTop: '0.5rem', fontWeight: 600 }}>
+          Total: <strong>{fmt(factura.totalFactura || 0)}</strong>
+        </div>
+      </div>
+    )
   }
 
   if (transaccio.detallIngres?.tipus === 'nomina' && transaccio.detallIngres.nomina) {
     const nomina = transaccio.detallIngres.nomina
-    return `Nòmina ${nomina.mode || 'net'} · Brut ${fmt(nomina.brut || 0)} · IRPF ${fmt(nomina.irpfImport || 0)} · SS ${fmt(nomina.ssImport || 0)}`
+    return (
+      <div style={{ fontSize: '0.9em', lineHeight: '1.5' }}>
+        <div style={{ fontWeight: 600, color: '#7c3aed' }}>💼 Nòmina</div>
+        <div>Base: <strong>{fmt(nomina.baseSou || 0)}</strong></div>
+        {nomina.complements ? <div>Complements: <strong>{fmt(nomina.complements)}</strong></div> : null}
+        <div>Brut: <strong>{fmt(nomina.brut || 0)}</strong></div>
+        <div style={{ borderTop: '1px solid #cbd5e1', paddingTop: '0.5rem', marginTop: '0.5rem' }}>
+          <div>IRPF: <strong style={{ color: '#ef4444' }}>-{fmt(nomina.irpfImport || 0)}</strong></div>
+          <div>SS: <strong style={{ color: '#ef4444' }}>-{fmt(nomina.ssImport || 0)}</strong></div>
+          {nomina.altresDeduccions ? <div>Altres: <strong style={{ color: '#ef4444' }}>-{fmt(nomina.altresDeduccions)}</strong></div> : null}
+        </div>
+        <div style={{ borderTop: '1px solid #cbd5e1', paddingTop: '0.5rem', marginTop: '0.5rem', fontWeight: 600 }}>
+          Net cobrat: <strong style={{ color: '#10b981' }}>{fmt(nomina.net || 0)}</strong>
+        </div>
+      </div>
+    )
   }
 
-  return 'Sense detall fiscal'
+  return <span style={{ color: '#64748b' }}>Sense detall fiscal</span>
 }
 
 export default function Ingressos() {
   const [transaccions, setTransaccions] = useState<Transaccio[]>([])
+  const [clients, setClients] = useState<Client[]>([])
   const [error, setError] = useState<string | null>(null)
   const [form, setForm] = useState(createEmptyForm())
+  const [fitxerAdjunt, setFitxerAdjunt] = useState<File | null>(null)
+  const [fileInputKey, setFileInputKey] = useState(0)
+  const [parsingPdf, setParsingPdf] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [editForm, setEditForm] = useState({ categoria: CATEGORIES[0], descripcio: '', import: '', data: avui() })
+  const [editForm, setEditForm] = useState({ categoria: 'General', clientId: '', descripcio: '', import: '', data: avui() })
   const [savingEdit, setSavingEdit] = useState(false)
   const [pageSize, setPageSize] = useState(50)
   const [currentPage, setCurrentPage] = useState(1)
-  const [selectedCategory, setSelectedCategory] = useState('all')
+  const [selectedTipusFiscal, setSelectedTipusFiscal] = useState<'all' | DetallTipus>('all')
 
-  const load = () => {
-    fetch('http://localhost:3001/api/transaccions')
-      .then(res => {
-        if (!res.ok) throw new Error('Error carregant dades')
-        return res.json()
-      })
-      .then((all: (Transaccio & { tipus: string })[]) =>
-        setTransaccions(all.filter(t => t.tipus === 'ingres'))
-      )
-      .catch(err => setError(err.message))
+  const load = async () => {
+    try {
+      const [transRes, clientsRes] = await Promise.all([
+        fetch('http://localhost:3001/api/transaccions'),
+        fetch('http://localhost:3001/api/clients/actius'),
+      ])
+
+      if (!transRes.ok) throw new Error('Error carregant transaccions')
+      if (!clientsRes.ok) throw new Error('Error carregant clients')
+
+      const all: (Transaccio & { tipus: string })[] = await transRes.json()
+      const clientsData: Client[] = await clientsRes.json()
+
+      setTransaccions(all.filter(t => t.tipus === 'ingres'))
+      setClients(clientsData)
+      setForm(prev => (prev.clientId ? prev : { ...prev, clientId: clientsData[0]?._id || '' }))
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Error desconegut')
+    }
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { void load() }, [])
 
-  const availableCategories = useMemo(() => {
-    const categories = new Set<string>(CATEGORIES)
-    for (const t of transaccions) categories.add(t.categoria)
-    return Array.from(categories)
+  const clientsById = useMemo(() => {
+    const map = new Map<string, Client>()
+    for (const client of clients) map.set(client._id, client)
+    return map
+  }, [clients])
+
+  const availableTipusFiscals = useMemo(() => {
+    const tipus = new Set<DetallTipus>()
+    for (const t of transaccions) tipus.add(tipusFiscalFromTransaccio(t))
+    return TIPUS_FISCALS_SELECTABLES.filter(t => tipus.has(t))
   }, [transaccions])
 
   const filteredTransaccions = useMemo(() => {
-    if (selectedCategory === 'all') return transaccions
-    return transaccions.filter(t => t.categoria === selectedCategory)
-  }, [selectedCategory, transaccions])
+    if (selectedTipusFiscal === 'all') return transaccions
+    return transaccions.filter(t => tipusFiscalFromTransaccio(t) === selectedTipusFiscal)
+  }, [selectedTipusFiscal, transaccions])
 
   const totalPages = Math.max(1, Math.ceil(filteredTransaccions.length / pageSize))
 
@@ -250,9 +318,32 @@ export default function Ingressos() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       })
-      if (!res.ok) throw new Error('Error afegint ingrés')
-      setForm(createEmptyForm())
-      load()
+      if (!res.ok) {
+        const body = await res.json().catch(() => null)
+        throw new Error(body?.missatge || 'Error afegint ingrés')
+      }
+
+      const created: Transaccio = await res.json()
+
+      if (fitxerAdjunt && created._id) {
+        const formData = new FormData()
+        formData.append('fitxer', fitxerAdjunt)
+
+        const uploadRes = await fetch(`http://localhost:3001/api/transaccions/${created._id}/upload`, {
+          method: 'POST',
+          body: formData,
+        })
+
+        if (!uploadRes.ok) {
+          const uploadBody = await uploadRes.json().catch(() => null)
+          throw new Error(uploadBody?.missatge || 'Ingrés creat, però no s\'ha pogut pujar l\'adjunt')
+        }
+      }
+
+      setFitxerAdjunt(null)
+      setFileInputKey(prev => prev + 1)
+      setForm(createEmptyForm(clients[0]?._id || ''))
+      await load()
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Error desconegut')
     } finally {
@@ -274,6 +365,7 @@ export default function Ingressos() {
     setEditingId(transaccio._id)
     setEditForm({
       categoria: transaccio.categoria,
+      clientId: transaccio.clientId || '',
       descripcio: transaccio.descripcio,
       import: String(transaccio.import),
       data: transaccio.data.slice(0, 10),
@@ -289,6 +381,8 @@ export default function Ingressos() {
     setError(null)
     try {
       const parsedImport = parseAmount(editForm.import)
+      if (!editForm.descripcio.trim()) throw new Error('La descripció és obligatòria')
+      if (!editForm.clientId) throw new Error('Has de seleccionar un client')
       if (parsedImport <= 0) {
         throw new Error('L\'import ha de ser major que 0')
       }
@@ -299,13 +393,17 @@ export default function Ingressos() {
         body: JSON.stringify({
           tipus: 'ingres',
           categoria: editForm.categoria,
-          descripcio: editForm.descripcio,
+          clientId: editForm.clientId,
+          descripcio: editForm.descripcio.trim(),
           import: parsedImport,
           data: editForm.data,
         }),
       })
 
-      if (!res.ok) throw new Error('Error actualitzant ingrés')
+      if (!res.ok) {
+        const body = await res.json().catch(() => null)
+        throw new Error(body?.missatge || 'Error actualitzant ingrés')
+      }
       const updated: Transaccio = await res.json()
 
       setTransaccions(prev => prev.map(t => (t._id === id ? { ...t, ...updated } : t)))
@@ -317,44 +415,95 @@ export default function Ingressos() {
     }
   }
 
+  const analitzaPdfFactura = async () => {
+    if (!fitxerAdjunt) {
+      setError('Primer has de seleccionar un PDF')
+      return
+    }
+    if (form.detallTipus !== 'factura') {
+      setError('L\'autocompleció de Base/IVA/IRPF només està disponible per factures')
+      return
+    }
+
+    setParsingPdf(true)
+    setError(null)
+    try {
+      const formData = new FormData()
+      formData.append('fitxer', fitxerAdjunt)
+
+      const res = await fetch('http://localhost:3001/api/transaccions/parse-factura-pdf', {
+        method: 'POST',
+        body: formData,
+      })
+
+      const body = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(body?.missatge || 'No s\'ha pogut analitzar el PDF')
+
+      const parsed = body?.parsed || {}
+
+      setForm(prev => ({
+        ...prev,
+        facturaBase: parsed.base != null ? String(parsed.base) : prev.facturaBase,
+        facturaIvaPct: parsed.ivaPct != null ? String(parsed.ivaPct) : prev.facturaIvaPct,
+        facturaIrpfPct: parsed.irpfPct != null ? String(parsed.irpfPct) : prev.facturaIrpfPct,
+      }))
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Error desconegut')
+    } finally {
+      setParsingPdf(false)
+    }
+  }
+
   return (
     <section>
       <h2>Ingressos</h2>
-      <p className="page-description">Registre de totes les entrades de diners amb detall fiscal per factures freelance i nòmines.</p>
+      <p className="page-description">Registre de totes les entrades de diners amb client obligatori i tipus fiscal seleccionable per l'usuari.</p>
 
       {error && <p style={{ color: '#ef4444' }}>⚠ {error}</p>}
 
       <form className="form-transaccio" onSubmit={handleSubmit}>
         <div className="form-row">
           <label>
-            Categoria
-            <select
-              value={form.categoria}
-              onChange={e => {
-                const categoria = e.target.value
-                setForm(prev => ({ ...prev, categoria, detallTipus: defaultDetailTypeByCategory(categoria) }))
-              }}
-            >
-              {CATEGORIES.map(c => <option key={c}>{c}</option>)}
-            </select>
-          </label>
-
-          <label>
             Tipus fiscal
-            <select value={form.detallTipus} onChange={e => setForm(prev => ({ ...prev, detallTipus: e.target.value as DetallTipus }))}>
-              <option value="general">General</option>
-              <option value="factura">Factura freelance</option>
-              <option value="nomina">Nòmina</option>
+            <div className="tipus-radio-group" role="radiogroup" aria-label="Tipus fiscal">
+              {TIPUS_FISCALS_SELECTABLES.map(t => (
+                <label key={t} className={`tipus-radio ${form.detallTipus === t ? 'tipus-radio--active' : ''}`}>
+                  <input
+                    className="tipus-radio__input"
+                    type="radio"
+                    name="tipusFiscal"
+                    value={t}
+                    checked={form.detallTipus === t}
+                    onChange={() => setForm(prev => ({ ...prev, detallTipus: t }))}
+                  />
+                  <span className="tipus-radio__label">{labelTipusFiscal(t)}</span>
+                </label>
+              ))}
+            </div>
+          </label>
+
+          <label>
+            Client *
+            <select
+              required
+              value={form.clientId}
+              onChange={e => setForm(prev => ({ ...prev, clientId: e.target.value }))}
+            >
+              <option value="">Selecciona client</option>
+              {clients.map(c => (
+                <option key={c._id} value={c._id}>{clientLabel(c)}</option>
+              ))}
             </select>
           </label>
 
           <label>
-            Descripció
+            Descripció *
             <input
               type="text"
+              required
               value={form.descripcio}
               onChange={e => setForm(prev => ({ ...prev, descripcio: e.target.value }))}
-              placeholder="Client, empresa o concepte"
+              placeholder="Concepte de l'ingrés"
             />
           </label>
 
@@ -368,23 +517,6 @@ export default function Ingressos() {
             />
           </label>
         </div>
-
-        {form.detallTipus === 'general' && (
-          <div className="form-row fiscal-box">
-            <label>
-              Import cobrat (€)
-              <input
-                type="number"
-                min="0.01"
-                step="0.01"
-                required
-                value={form.import}
-                onChange={e => setForm(prev => ({ ...prev, import: e.target.value }))}
-                placeholder="0,00"
-              />
-            </label>
-          </div>
-        )}
 
         {form.detallTipus === 'factura' && (
           <div className="fiscal-box">
@@ -548,12 +680,42 @@ export default function Ingressos() {
           </div>
         )}
 
+        <div className="form-row fiscal-box" style={{ marginTop: '0.75rem' }}>
+          <label>
+            Adjunt (PDF, imatge, Excel...)
+            <input
+              key={fileInputKey}
+              type="file"
+              onChange={e => setFitxerAdjunt(e.target.files?.[0] || null)}
+            />
+          </label>
+          <button
+            type="button"
+            className="btn-page"
+            disabled={!fitxerAdjunt || form.detallTipus !== 'factura' || parsingPdf}
+            onClick={() => {
+              void analitzaPdfFactura()
+            }}
+          >
+            {parsingPdf ? 'Analitzant PDF...' : 'Llegir PDF i autoemplenar'}
+          </button>
+          <span className="fiscal-note">
+            Opcional. Es guardarà vinculat a aquesta factura o nòmina. Si és una factura en PDF, pots autoemplenar Base/IVA/IRPF.
+          </span>
+        </div>
+
         <div className="fiscal-actions">
-          <button type="submit" className="btn btn--income" disabled={submitting}>
+          <button type="submit" className="btn btn--income" disabled={submitting || clients.length === 0}>
             + Afegir ingrés
           </button>
-          <span className="fiscal-note">L'import guardat és sempre el diner real cobrat. El detall fiscal s'usa per a impostos i anàlisi.</span>
+          <span className="fiscal-note">Tipus fiscal seleccionable manualment. Client i descripció són obligatoris.</span>
         </div>
+
+        {clients.length === 0 && (
+          <p style={{ color: '#ef4444', marginTop: '0.75rem' }}>
+            No hi ha clients actius. Crea primer un client per poder registrar ingressos.
+          </p>
+        )}
       </form>
 
       {transaccions.length === 0 ? (
@@ -562,16 +724,16 @@ export default function Ingressos() {
         <>
           <div className="list-controls" style={{ marginTop: '1.5rem' }}>
             <label className="list-controls__label">
-              Categoria
+              Tipus fiscal
               <select
-                value={selectedCategory}
+                value={selectedTipusFiscal}
                 onChange={e => {
-                  setSelectedCategory(e.target.value)
+                  setSelectedTipusFiscal(e.target.value as 'all' | DetallTipus)
                   setCurrentPage(1)
                 }}
               >
                 <option value="all">Totes</option>
-                {availableCategories.map(c => <option key={c} value={c}>{c}</option>)}
+                {availableTipusFiscals.map(t => <option key={t} value={t}>{labelTipusFiscal(t)}</option>)}
               </select>
             </label>
 
@@ -617,14 +779,16 @@ export default function Ingressos() {
           </div>
 
           {filteredTransaccions.length === 0 ? (
-            <p style={{ color: '#64748b', marginTop: '1rem' }}>Cap ingrés amb la categoria seleccionada.</p>
+            <p style={{ color: '#64748b', marginTop: '1rem' }}>Cap ingrés amb el tipus fiscal seleccionat.</p>
           ) : (
             <table className="taula" style={{ marginTop: '1rem' }}>
               <thead>
                 <tr>
                   <th>Data</th>
-                  <th>Categoria</th>
+                  <th>Tipus fiscal</th>
+                  <th>Client</th>
                   <th>Descripció</th>
+                  <th>Adjunt</th>
                   <th>Import</th>
                   <th>Detall fiscal</th>
                   <th></th>
@@ -644,12 +808,16 @@ export default function Ingressos() {
                           />
                         </td>
                         <td>
+                          <input className="row-edit-input" type="text" value={labelTipusFiscal(tipusFiscalFromTransaccio(transaccio))} readOnly />
+                        </td>
+                        <td>
                           <select
                             className="row-edit-input"
-                            value={editForm.categoria}
-                            onChange={e => setEditForm(prev => ({ ...prev, categoria: e.target.value }))}
+                            value={editForm.clientId}
+                            onChange={e => setEditForm(prev => ({ ...prev, clientId: e.target.value }))}
                           >
-                            {availableCategories.map(c => <option key={c} value={c}>{c}</option>)}
+                            <option value="">Selecciona client</option>
+                            {clients.map(c => <option key={c._id} value={c._id}>{clientLabel(c)}</option>)}
                           </select>
                         </td>
                         <td>
@@ -658,9 +826,10 @@ export default function Ingressos() {
                             type="text"
                             value={editForm.descripcio}
                             onChange={e => setEditForm(prev => ({ ...prev, descripcio: e.target.value }))}
-                            placeholder="Opcional"
+                            placeholder="Obligatori"
                           />
                         </td>
+                        <td className="fiscal-detail">No editable</td>
                         <td>
                           <input
                             className="row-edit-input"
@@ -671,7 +840,7 @@ export default function Ingressos() {
                             onChange={e => setEditForm(prev => ({ ...prev, import: e.target.value }))}
                           />
                         </td>
-                        <td className="fiscal-detail">El detall fiscal actual es conserva. Aquesta primera versió només edita camps bàsics.</td>
+                        <td className="fiscal-detail">El detall fiscal actual es conserva. Aquesta versió edita els camps principals.</td>
                         <td className="row-actions">
                           <button
                             type="button"
@@ -689,8 +858,10 @@ export default function Ingressos() {
                     ) : (
                       <>
                         <td>{new Date(transaccio.data).toLocaleDateString('ca-ES')}</td>
-                        <td>{transaccio.categoria}</td>
+                        <td>{labelTipusFiscal(tipusFiscalFromTransaccio(transaccio))}</td>
+                        <td>{transaccio.clientId && clientsById.has(transaccio.clientId) ? clientLabel(clientsById.get(transaccio.clientId) as Client) : '—'}</td>
                         <td>{transaccio.descripcio || '—'}</td>
+                        <td>{transaccio.adjunts?.length ? `📎 ${transaccio.adjunts.length}` : '—'}</td>
                         <td className="positiu">+{fmt(transaccio.import)}</td>
                         <td className="fiscal-detail">{formatDetallFiscal(transaccio)}</td>
                         <td className="row-actions">
@@ -704,7 +875,7 @@ export default function Ingressos() {
               </tbody>
               <tfoot>
                 <tr>
-                  <td colSpan={3} style={{ color: '#64748b', fontWeight: 600, paddingTop: '0.75rem' }}>Total cobrat</td>
+                  <td colSpan={5} style={{ color: '#64748b', fontWeight: 600, paddingTop: '0.75rem' }}>Total cobrat</td>
                   <td className="positiu" style={{ paddingTop: '0.75rem' }}>+{fmt(total)}</td>
                   <td></td>
                   <td></td>

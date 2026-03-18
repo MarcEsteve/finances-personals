@@ -135,6 +135,49 @@
   border-color: #38bdf8;
 }
 
+.tipus-radio-group {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.tipus-radio {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #334155;
+  border-radius: 999px;
+  background-color: #0f172a;
+  color: #cbd5e1;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.tipus-radio:hover {
+  border-color: #38bdf8;
+  color: #f8fafc;
+}
+
+.tipus-radio--active {
+  border-color: #38bdf8;
+  background-color: #082f49;
+  color: #f8fafc;
+}
+
+.tipus-radio__input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.tipus-radio__label {
+  padding: 0.42rem 0.85rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
 .btn {
   padding: 0.5rem 1.1rem;
   border: none;

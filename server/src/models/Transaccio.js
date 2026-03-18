@@ -88,6 +88,36 @@ const detallIngresSchema = new mongoose.Schema(
   { _id: false }
 )
 
+const detallCriptoSchema = new mongoose.Schema(
+  {
+    moneda: {
+      type: String,
+      enum: ['Bitcoin', 'Ethereum', 'Altres'],
+      required: true,
+    },
+    quantitat: {
+      type: Number,
+      required: true,
+      min: 0,
+    },
+    preuUnitariEuro: {
+      type: Number,
+      required: true,
+      min: 0,
+    },
+    totalEuro: {
+      type: Number,
+      required: true,
+      min: 0,
+    },
+    dataActualitzacio: {
+      type: Date,
+      default: Date.now,
+    },
+  },
+  { _id: false }
+)
+
 const transaccioSchema = new mongoose.Schema(
   {
     tipus: {
@@ -117,6 +147,36 @@ const transaccioSchema = new mongoose.Schema(
     },
     detallIngres: {
       type: detallIngresSchema,
+      default: undefined,
+    },
+    detallCripto: {
+      type: detallCriptoSchema,
+      default: undefined,
+    },
+    adjunts: [
+      {
+        fileName: {
+          type: String,
+          required: true,
+        },
+        originalName: {
+          type: String,
+        },
+        mimeType: {
+          type: String,
+        },
+        size: {
+          type: Number,
+        },
+        uploadedAt: {
+          type: Date,
+          default: Date.now,
+        },
+      },
+    ],
+    clientId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Client',
       default: undefined,
     },
   },

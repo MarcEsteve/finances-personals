@@ -8,6 +8,7 @@ const navItems = [
   { to: '/impostos', label: 'Impostos' },
   { to: '/estalvis', label: 'Estalvis' },
   { to: '/informes', label: 'Informes' },
+  { to: '/clients', label: 'Clients' },
 ]
 
 export default function Header() {
