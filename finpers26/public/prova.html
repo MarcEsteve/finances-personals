@@ -1,0 +1,369 @@
+<!doctype html>
+
+<html class="dark" lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&amp;family=Inter:wght@300..700&amp;family=Space+Grotesk:wght@300..700&amp;display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "on-error-container": "#ffdad6",
+              secondary: "#b9c7df",
+              "primary-fixed": "#c4e7ff",
+              "secondary-fixed-dim": "#b9c7df",
+              "on-primary": "#00354a",
+              "inverse-surface": "#dae2fd",
+              "surface-container-lowest": "#060e20",
+              "surface-container-highest": "#2d3449",
+              "surface-container-low": "#131b2e",
+              "primary-container": "#001a27",
+              "on-primary-fixed-variant": "#004c69",
+              "on-background": "#dae2fd",
+              "on-tertiary-fixed-variant": "#5516be",
+              "on-secondary-container": "#abb9d1",
+              surface: "#0b1326",
+              "on-secondary": "#233144",
+              "on-tertiary-container": "#9162fc",
+              "secondary-container": "#3c4a5e",
+              "on-surface": "#dae2fd",
+              background: "#0b1326",
+              outline: "#909097",
+              "tertiary-container": "#1e0052",
+              "tertiary-fixed-dim": "#d0bcff",
+              "error-container": "#93000a",
+              "on-primary-fixed": "#001e2c",
+              "inverse-primary": "#00668a",
+              "secondary-fixed": "#d5e3fc",
+              "on-primary-container": "#008abb",
+              "outline-variant": "#45464d",
+              "on-tertiary-fixed": "#23005c",
+              "surface-variant": "#2d3449",
+              error: "#ffb4ab",
+              "on-secondary-fixed": "#0d1c2e",
+              tertiary: "#d0bcff",
+              "surface-container": "#171f33",
+              "tertiary-fixed": "#e9ddff",
+              "on-tertiary": "#3c0091",
+              "surface-container-high": "#222a3d",
+              primary: "#7bd0ff",
+              "on-error": "#690005",
+              "on-surface-variant": "#c6c6cd",
+              "on-secondary-fixed-variant": "#3a485b",
+              "surface-dim": "#0b1326",
+              "surface-bright": "#31394d",
+              "primary-fixed-dim": "#7bd0ff",
+              "surface-tint": "#7bd0ff",
+              "inverse-on-surface": "#283044",
+            },
+            fontFamily: {
+              headline: ["Manrope"],
+              body: ["Inter"],
+              label: ["Space Grotesk"],
+            },
+            borderRadius: {
+              DEFAULT: "0.125rem",
+              lg: "0.25rem",
+              xl: "0.5rem",
+              full: "0.75rem",
+            },
+          },
+        },
+      };
+    </script>
+    <style>
+      @keyframes fluid-blob {
+        0%,
+        100% {
+          transform: translate(0, 0) scale(1);
+        }
+        33% {
+          transform: translate(30px, -50px) scale(1.1);
+        }
+        66% {
+          transform: translate(-20px, 20px) scale(0.9);
+        }
+      }
+      .animate-fluid {
+        animation: fluid-blob 15s infinite alternate ease-in-out;
+      }
+      .animate-fluid-delayed {
+        animation: fluid-blob 18s infinite alternate-reverse ease-in-out;
+      }
+      .glass-panel {
+        background: rgba(11, 19, 38, 0.4);
+        backdrop-filter: blur(24px);
+        -webkit-backdrop-filter: blur(24px);
+      }
+    </style>
+    <style>
+      #mouse-trail-canvas {
+        mix-blend-mode: screen;
+      }
+    </style>
+  </head>
+  <body
+    class="bg-surface text-on-surface selection:bg-primary/30 antialiased overflow-x-hidden"
+  >
+    <!-- Hero Section Container -->
+    <section
+      class="relative w-full h-[870px] md:h-screen flex items-center justify-center overflow-hidden bg-surface"
+    >
+      <canvas
+        class="absolute inset-0 z-[5] pointer-events-none"
+        id="mouse-trail-canvas"
+      ></canvas>
+      <!-- Background Layer: The "Digital Curator" Canvas -->
+      <div class="absolute inset-0 z-0">
+        <!-- Organic SVG Blobs simulating 'Google Stitch' style -->
+        <div
+          class="absolute top-[-10%] left-[-10%] w-[60%] h-[70%] bg-[#008abb]/20 blur-[120px] rounded-full animate-fluid"
+        ></div>
+        <div
+          class="absolute bottom-[-20%] right-[-10%] w-[50%] h-[80%] bg-[#7bd0ff]/15 blur-[100px] rounded-full animate-fluid-delayed"
+        ></div>
+        <div
+          class="absolute top-[20%] right-[10%] w-[30%] h-[40%] bg-[#1e0052]/30 blur-[110px] rounded-full animate-fluid"
+        ></div>
+        <!-- Interconnected Nodes Pattern Overlay -->
+        <svg
+          class="absolute inset-0 w-full h-full opacity-20"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <defs>
+            <pattern
+              height="100"
+              id="grid-nodes"
+              patternunits="userSpaceOnUse"
+              width="100"
+            >
+              <circle cx="2" cy="2" fill="#7bd0ff" r="1"></circle>
+              <path
+                d="M 2 2 L 100 2 M 2 2 L 2 100"
+                fill="none"
+                stroke="#7bd0ff"
+                stroke-width="0.2"
+              ></path>
+            </pattern>
+          </defs>
+          <rect fill="url(#grid-nodes)" height="100%" width="100%"></rect>
+        </svg>
+        <!-- Gradient Overlay for Depth -->
+        <div
+          class="absolute inset-0 bg-gradient-to-b from-surface/20 via-transparent to-surface"
+        ></div>
+      </div>
+      <!-- Content Canvas -->
+      <div class="relative z-10 container mx-auto px-6 text-center">
+        <div
+          class="flex flex-col items-center justify-center space-y-8 max-w-5xl mx-auto"
+        >
+          <!-- "Data Pulse" Tag -->
+          <div
+            class="inline-flex items-center px-4 py-1.5 rounded-full bg-tertiary-container text-tertiary font-label text-xs tracking-widest uppercase mb-4 shadow-xl border border-tertiary/10"
+          >
+            <span class="relative flex h-2 w-2 mr-3">
+              <span
+                class="animate-ping absolute inline-flex h-full w-full rounded-full bg-tertiary opacity-75"
+              ></span>
+              <span
+                class="relative inline-flex rounded-full h-2 w-2 bg-tertiary"
+              ></span>
+            </span>
+            Digital Intelligence Platform
+          </div>
+          <!-- Main Branding Heading -->
+          <h1
+            class="font-headline text-6xl md:text-9xl font-extrabold tracking-tighter text-slate-100 leading-none"
+          >
+            <span
+              class="block text-transparent bg-clip-text bg-gradient-to-br from-white via-primary to-on-primary-container"
+            >
+              CLARIAH-CAT
+            </span>
+          </h1>
+          <!-- Subtext -->
+          <p
+            class="font-body text-lg md:text-xl text-on-surface-variant/80 max-w-2xl mx-auto leading-relaxed tracking-tight"
+          >
+            Infraestructura para el estudio avanzado de las Humanidades
+            Digitales y las Ciencias Sociales en Cataluña.
+          </p>
+          <!-- Action Button Cluster -->
+          <div class="pt-8 flex flex-col sm:flex-row items-center gap-6">
+            <!-- Primary CTA -->
+            <button
+              class="group relative px-8 py-4 rounded-lg overflow-hidden transition-all duration-300 transform hover:scale-[1.02] active:scale-95"
+            >
+              <div
+                class="absolute inset-0 bg-gradient-to-r from-primary to-on-primary-container transition-opacity group-hover:opacity-90"
+              ></div>
+              <div
+                class="relative flex items-center gap-3 font-label font-bold text-on-primary text-base"
+              >
+                Conoce CLARIAH-CAT
+                <span
+                  class="material-symbols-outlined transition-transform duration-300 group-hover:translate-x-1"
+                  >arrow_forward</span
+                >
+              </div>
+            </button>
+            <!-- Secondary Link -->
+            <button
+              class="px-8 py-4 font-label font-medium text-primary hover:text-primary-fixed transition-colors flex items-center gap-2 group"
+            >
+              Documentación
+              <span
+                class="material-symbols-outlined text-sm group-hover:opacity-100 opacity-50 transition-opacity"
+                >open_in_new</span
+              >
+            </button>
+          </div>
+        </div>
+      </div>
+      <!-- Decorative Floating Elements -->
+      <div
+        class="absolute bottom-12 left-12 hidden lg:block glass-panel p-6 rounded-xl border border-white/5 shadow-2xl"
+      >
+        <div class="flex items-center gap-4">
+          <div
+            class="w-12 h-12 rounded-lg bg-surface-container-highest flex items-center justify-center"
+          >
+            <span
+              class="material-symbols-outlined text-primary"
+              data-weight="fill"
+              >hub</span
+            >
+          </div>
+          <div class="text-left">
+            <p
+              class="text-xs font-label text-primary tracking-widest uppercase"
+            >
+              Red de Datos
+            </p>
+            <p class="text-sm font-body text-on-surface">
+              Conectividad de Archivos
+            </p>
+          </div>
+        </div>
+      </div>
+      <div
+        class="absolute top-24 right-12 hidden lg:block glass-panel p-6 rounded-xl border border-white/5 shadow-2xl"
+      >
+        <div class="flex items-center gap-4">
+          <div
+            class="w-12 h-12 rounded-lg bg-surface-container-highest flex items-center justify-center"
+          >
+            <span
+              class="material-symbols-outlined text-tertiary"
+              data-weight="fill"
+              >token</span
+            >
+          </div>
+          <div class="text-left">
+            <p
+              class="text-xs font-label text-tertiary tracking-widest uppercase"
+            >
+              Curación Digital
+            </p>
+            <p class="text-sm font-body text-on-surface">
+              Inteligencia Editorial
+            </p>
+          </div>
+        </div>
+      </div>
+      <!-- Image Reference for Background Concept -->
+      <img
+        class="hidden"
+        data-alt="Fluid organic abstract nodes with blue and teal gradients and interconnecting lines representing data flow"
+        src="https://lh3.googleusercontent.com/aida-public/AB6AXuAGLH9FT_6WZWpQ44mKo9oJANs3K7MDyOycCpSZTY4sOjLNBr-341zYydgS8QKFRcLncVdU2VfX54IfrLGhTMT5mNHZo6Wz-eTYXVKoMaIVta2O_MxDgjTfqTlXRFIkStaMFFzXkYD3phYAYbnsuhIjemjSiuRHE-aN_sVPzoziCcl-_-CRfGdSJJCb4SvD3CFtTbczENWL-b5WTxEVF4IvLzregJkhQJFUUYNNcY-FR2J84x93gWvkrrzQ6AfhQmoqTOG5tw_6YW0"
+      />
+    </section>
+    <script>
+      (function () {
+        const canvas = document.getElementById("mouse-trail-canvas");
+        const ctx = canvas.getContext("2d");
+        const section = canvas.parentElement;
+        let particles = [];
+
+        function resize() {
+          canvas.width = section.offsetWidth;
+          canvas.height = section.offsetHeight;
+        }
+
+        window.addEventListener("resize", resize);
+        resize();
+
+        class Particle {
+          constructor(x, y) {
+            this.x = x;
+            this.y = y;
+            this.size = Math.random() * 3 + 1;
+            this.speedX = Math.random() * 1 - 0.5;
+            this.speedY = Math.random() * 1 - 0.5;
+            this.color = "#7bd0ff";
+            this.alpha = 1;
+            this.decay = Math.random() * 0.02 + 0.015;
+          }
+
+          update() {
+            this.x += this.speedX;
+            this.y += this.speedY;
+            this.alpha -= this.decay;
+          }
+
+          draw() {
+            ctx.save();
+            ctx.globalAlpha = this.alpha;
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = this.color;
+            ctx.fillStyle = this.color;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+          }
+        }
+
+        section.addEventListener("mousemove", (e) => {
+          const rect = section.getBoundingClientRect();
+          const mouseX = e.clientX - rect.left;
+          const mouseY = e.clientY - rect.top;
+
+          for (let i = 0; i < 2; i++) {
+            particles.push(new Particle(mouseX, mouseY));
+          }
+        });
+
+        function animate() {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          for (let i = 0; i < particles.length; i++) {
+            particles[i].update();
+            particles[i].draw();
+            if (particles[i].alpha <= 0) {
+              particles.splice(i, 1);
+              i--;
+            }
+          }
+          requestAnimationFrame(animate);
+        }
+        animate();
+      })();
+    </script>
+  </body>
+</html>
