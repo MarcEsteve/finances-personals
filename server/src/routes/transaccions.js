@@ -219,6 +219,15 @@ router.post('/:id/upload', upload.single('fitxer'), async (req, res) => {
       return res.status(404).json({ missatge: 'Transacció no trobada' })
     }
 
+    const duplicateAdjunt = transaccio.adjunts?.find(
+      adjunt => adjunt.originalName === req.file.originalname && adjunt.size === req.file.size
+    )
+
+    if (duplicateAdjunt) {
+      fs.unlinkSync(req.file.path)
+      return res.status(409).json({ missatge: 'Aquest fitxer ja està penjat en aquesta transacció' })
+    }
+
     const adjunt = {
       fileName: req.file.filename,
       originalName: req.file.originalname,

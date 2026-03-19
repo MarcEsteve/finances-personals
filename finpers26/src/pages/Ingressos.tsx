@@ -58,6 +58,14 @@ function parseAmount(value: string) {
   return Number.isFinite(parsed) ? parsed : 0
 }
 
+function sameDay(a: string, b: string) {
+  return String(a).slice(0, 10) === String(b).slice(0, 10)
+}
+
+function round2(n: number) {
+  return Math.round(n * 100) / 100
+}
+
 function labelTipusFiscal(tipus: DetallTipus) {
   if (tipus === 'factura') return 'Factura freelance'
   if (tipus === 'nomina') return 'Nòmina'
@@ -207,6 +215,24 @@ function buildPayload(form: ReturnType<typeof createEmptyForm>) {
   throw new Error('Has de seleccionar un tipus fiscal vàlid: factura o nòmina')
 }
 
+function buildDuplicateSignature(form: ReturnType<typeof createEmptyForm>) {
+  if (form.detallTipus === 'factura') {
+    const factura = computeFactura(form)
+    return {
+      tipusFiscal: 'factura' as DetallTipus,
+      import: round2(factura.totalFactura),
+      base: round2(factura.base),
+    }
+  }
+
+  const nomina = computeNomina(form)
+  return {
+    tipusFiscal: 'nomina' as DetallTipus,
+    import: round2(nomina.net),
+    base: round2(nomina.brut),
+  }
+}
+
 function formatDetallFiscal(transaccio: Transaccio) {
   if (transaccio.detallIngres?.tipus === 'factura' && transaccio.detallIngres.factura) {
     const factura = transaccio.detallIngres.factura
@@ -262,6 +288,7 @@ export default function Ingressos() {
   const [pageSize, setPageSize] = useState(50)
   const [currentPage, setCurrentPage] = useState(1)
   const [selectedTipusFiscal, setSelectedTipusFiscal] = useState<'all' | DetallTipus>('all')
+  const [selectedMonth, setSelectedMonth] = useState('all')
 
   const load = async () => {
     try {
@@ -298,10 +325,21 @@ export default function Ingressos() {
     return TIPUS_FISCALS_SELECTABLES.filter(t => tipus.has(t))
   }, [transaccions])
 
+  const availableMonths = useMemo(() => {
+    const months = new Set<string>()
+    for (const transaccio of transaccions) {
+      months.add(String(transaccio.data).slice(0, 7))
+    }
+    return Array.from(months).sort((a, b) => b.localeCompare(a))
+  }, [transaccions])
+
   const filteredTransaccions = useMemo(() => {
-    if (selectedTipusFiscal === 'all') return transaccions
-    return transaccions.filter(t => tipusFiscalFromTransaccio(t) === selectedTipusFiscal)
-  }, [selectedTipusFiscal, transaccions])
+    return transaccions.filter(transaccio => {
+      const matchesTipus = selectedTipusFiscal === 'all' || tipusFiscalFromTransaccio(transaccio) === selectedTipusFiscal
+      const matchesMonth = selectedMonth === 'all' || String(transaccio.data).slice(0, 7) === selectedMonth
+      return matchesTipus && matchesMonth
+    })
+  }, [selectedMonth, selectedTipusFiscal, transaccions])
 
   const totalPages = Math.max(1, Math.ceil(filteredTransaccions.length / pageSize))
 
@@ -324,7 +362,36 @@ export default function Ingressos() {
     setSubmitting(true)
     setError(null)
     try {
+      if (!form.descripcio.trim()) {
+        throw new Error('La descripció és obligatòria i no pot contenir només espais')
+      }
+
       const payload = buildPayload(form)
+
+      const draft = buildDuplicateSignature(form)
+      const duplicate = transaccions.find(transaccio => {
+        const sameClient = transaccio.clientId === form.clientId
+        const sameType = tipusFiscalFromTransaccio(transaccio) === draft.tipusFiscal
+        const sameImport = round2(transaccio.import) === draft.import
+        const sameDateValue = sameDay(transaccio.data, form.data)
+        const sameFileName = fitxerAdjunt
+          ? transaccio.adjunts?.some(adjunt => adjunt.originalName === fitxerAdjunt.name)
+          : false
+
+        return sameClient && sameType && sameImport && sameDateValue && (fitxerAdjunt ? !!sameFileName : true)
+      })
+
+      if (duplicate) {
+        const duplicateMessage = fitxerAdjunt
+          ? 'Possible duplicat: ja existeix un ingrés del mateix client, data i import, i amb un adjunt del mateix nom. Revisa abans de guardar.'
+          : 'Possible duplicat: ja existeix un ingrés del mateix client, data i import. Revisa abans de guardar.'
+        const confirmed = confirm(`${duplicateMessage}\n\nVols guardar-lo igualment?`)
+        if (!confirmed) {
+          setSubmitting(false)
+          return
+        }
+      }
+
       const res = await fetch('http://localhost:3001/api/transaccions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -490,7 +557,13 @@ export default function Ingressos() {
         }
       }
 
-      const found = [parsed.base, parsed.ivaPct, parsed.irpfPct].filter(v => v != null).length
+      const found = [
+        parsed.base,
+        parsed.ivaPct,
+        parsed.irpfPct,
+        parsed.invoiceDate,
+        parsed.clientName,
+      ].filter(v => v != null && String(v).trim() !== '').length
 
       setForm(prev => ({
         ...prev,
@@ -510,7 +583,7 @@ export default function Ingressos() {
             ? ` · Client detectat: ${parsed.clientName}`
             : ` · Client al PDF: ${parsed.clientName} (sense coincidència automàtica)`
           : ''
-        setParseInfo(`Camps detectats: ${found}/3 · Base: ${nextBase || '-'} · IVA: ${nextIva || '-'}% · IRPF: ${nextIrpf || '-'}%${dateInfo}${clientInfo}`)
+        setParseInfo(`Camps detectats: ${found}/5 · Base: ${nextBase || '-'} · IVA: ${nextIva || '-'}% · IRPF: ${nextIrpf || '-'}%${dateInfo}${clientInfo}`)
       }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Error desconegut')
@@ -567,6 +640,8 @@ export default function Ingressos() {
             <input
               type="text"
               required
+              pattern=".*\S.*"
+              title="La descripció no pot contenir només espais"
               value={form.descripcio}
               onChange={e => setForm(prev => ({ ...prev, descripcio: e.target.value }))}
               placeholder="Concepte de l'ingrés"
@@ -810,6 +885,20 @@ export default function Ingressos() {
             </label>
 
             <label className="list-controls__label">
+              Mes
+              <select
+                value={selectedMonth}
+                onChange={e => {
+                  setSelectedMonth(e.target.value)
+                  setCurrentPage(1)
+                }}
+              >
+                <option value="all">Tots</option>
+                {availableMonths.map(month => <option key={month} value={month}>{month}</option>)}
+              </select>
+            </label>
+
+            <label className="list-controls__label">
               Mostrar
               <select
                 value={pageSize}
@@ -851,8 +940,9 @@ export default function Ingressos() {
           </div>
 
           {filteredTransaccions.length === 0 ? (
-            <p style={{ color: '#64748b', marginTop: '1rem' }}>Cap ingrés amb el tipus fiscal seleccionat.</p>
+            <p style={{ color: '#64748b', marginTop: '1rem' }}>Cap ingrés amb els filtres seleccionats.</p>
           ) : (
+            <>
             <table className="taula" style={{ marginTop: '1rem' }}>
               <thead>
                 <tr>
@@ -954,6 +1044,31 @@ export default function Ingressos() {
                 </tr>
               </tfoot>
             </table>
+
+            <div className="pagination pagination--bottom" style={{ marginTop: '1rem', justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                className="btn-page"
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage(page => Math.max(1, page - 1))}
+              >
+                Anterior
+              </button>
+              <span className="pagination__info">
+                {filteredTransaccions.length === 0
+                  ? '0 resultats amb aquest filtre'
+                  : `Pàgina ${currentPage} de ${totalPages} · ${startIndex + 1}-${endIndex} de ${filteredTransaccions.length}`}
+              </span>
+              <button
+                type="button"
+                className="btn-page"
+                disabled={currentPage === totalPages}
+                onClick={() => setCurrentPage(page => Math.min(totalPages, page + 1))}
+              >
+                Següent
+              </button>
+            </div>
+            </>
           )}
         </>
       )}
