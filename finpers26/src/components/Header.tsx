@@ -15,7 +15,7 @@ export default function Header() {
   return (
     <header className={styles.header}>
       <div className={styles.brand}>
-        <img src="/finpers26-icon.png" alt="Finances Personals" className={styles.logo} />
+        <img src="/finpers26-logo-icona-fons-transparent.png" alt="Finances Personals" className={styles.logo} />
         <h1 className={styles.title}>Finances Personals 2026</h1>
       </div>
       <nav className={styles.nav}>
