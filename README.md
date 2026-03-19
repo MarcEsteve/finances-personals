@@ -1,5 +1,5 @@
 <p align="center">
-	<img src="finpers26/public/finpers26-icon.png" alt="Finances Personals 2026" width="120" />
+	<img src="finpers26/public/finpers26-icon.png" alt="Finances Personals 2026" width="200" />
 </p>
 
 # Finances Personals 2026
